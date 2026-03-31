@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.layout.LayoutIdParentData
 import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsProperties.EditableText
 import androidx.compose.ui.semantics.SemanticsProperties.Text
@@ -42,7 +43,9 @@ public object ViewStateRenderers {
       View.INVISIBLE -> append("INVISIBLE")
     }
 
-    append(formatPixelDimensions(view.width, view.height))
+    val loc = IntArray(2)
+    view.getLocationOnScreen(loc)
+    append("[${loc[0]},${loc[1]},${loc[0] + view.width},${loc[1] + view.height}]")
 
     if (view.isFocused) {
       append("focused")
@@ -63,10 +66,10 @@ public object ViewStateRenderers {
     ViewStateRenderer { scannableView ->
       val composeView = scannableView as? ComposeView ?: return@ViewStateRenderer
 
-      // Dimensions
+      // Bounds
       composeView.apply {
         if (width != 0 || height != 0) {
-          append(formatPixelDimensions(width, height))
+          append("[$left,$top,${left + width},${top + height}]")
         }
       }
 
@@ -119,6 +122,13 @@ public object ViewStateRenderers {
             SemanticsProperties.Password -> append("PASSWORD")
           }
         }
+
+      // Clickable action
+      if (composeView.semanticsConfigurations.any { config ->
+        config.any { it.key == SemanticsActions.OnClick }
+      }) {
+        append("CLICKABLE")
+      }
 
       // Layout ID
       composeView.modifiers

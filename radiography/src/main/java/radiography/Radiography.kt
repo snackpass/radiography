@@ -37,6 +37,23 @@ public object Radiography {
    * views that match specific ids (e.g. a debug drawer). Use [ViewFilters.FocusedWindowViewFilter]
    * to keep only the views of the currently focused window, if any.
    */
+  /**
+   * Scans the view hierarchy and returns a structured [AgentNode] tree suitable for
+   * agent consumption. Prunes wrapper nodes, skips decorative elements, and includes
+   * absolute bounds for every node.
+   *
+   * Must be called from the main thread.
+   */
+  @JvmStatic
+  @JvmOverloads
+  public fun scanToAgentTree(
+    scanScope: ScanScope = AllWindowsScope,
+    viewFilter: ViewFilter = ViewFilters.NoFilter,
+  ): List<AgentNode> {
+    val roots = scanScope.findRoots().toList()
+    return AgentTreeBuilder.build(roots, viewFilter)
+  }
+
   @JvmStatic
   @JvmOverloads
   public fun scan(

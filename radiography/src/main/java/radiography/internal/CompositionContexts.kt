@@ -8,13 +8,20 @@ import kotlin.LazyThreadSafetyMode.PUBLICATION
 
 private val REFLECTION_CONSTANTS by lazy(PUBLICATION) {
   try {
+    // In Compose 1.7+, ReusableRememberObserverHolder was renamed to RememberObserverHolder.
+    // Try both names for backward compatibility.
+    val rememberObserverHolderClass = try {
+      Class.forName("androidx.compose.runtime.RememberObserverHolder")
+    } catch (_: ClassNotFoundException) {
+      Class.forName("androidx.compose.runtime.ReusableRememberObserverHolder")
+    }
+
     object {
       val CompositionContextHolderClass =
         Class.forName("androidx.compose.runtime.ComposerImpl\$CompositionContextHolder")
       val CompositionContextImplClass =
         Class.forName("androidx.compose.runtime.ComposerImpl\$CompositionContextImpl")
-      val ReusableRememberObserverHolderClass =
-        Class.forName("androidx.compose.runtime.ReusableRememberObserverHolder")
+      val RememberObserverHolderClass = rememberObserverHolderClass
       val CompositionContextHolderRefField =
         CompositionContextHolderClass.getDeclaredField("ref")
           .apply { isAccessible = true }
@@ -30,14 +37,30 @@ private val REFLECTION_CONSTANTS by lazy(PUBLICATION) {
 @OptIn(UiToolingDataApi::class)
 internal fun Group.getCompositionContexts(): Sequence<CompositionContext> {
   return REFLECTION_CONSTANTS?.run {
-    data.asSequence()
-      .filter { it != null && it::class.java == ReusableRememberObserverHolderClass }
+    // In Compose 1.7+, CompositionContextHolder may appear directly in Group.data
+    // (not wrapped in RememberObserverHolder), or wrapped in the new RememberObserverHolder.
+    val directContexts = data.asSequence()
+      .filter { it != null && CompositionContextHolderClass.isInstance(it) }
       .mapNotNull { holder ->
-        holder
-          ?.let { holder::class.java.getMethod("getWrapped") }
-          ?.invoke(holder)
-          ?.tryGetCompositionContext()
+        try {
+          CompositionContextHolderRefField.get(holder) as? CompositionContext
+        } catch (_: Throwable) {
+          null
+        }
       }
+
+    val wrappedContexts = data.asSequence()
+      .filter { it != null && it::class.java == RememberObserverHolderClass }
+      .mapNotNull { holder ->
+        try {
+          val wrapped = holder?.let { holder::class.java.getMethod("getWrapped") }?.invoke(holder)
+          wrapped?.tryGetCompositionContext()
+        } catch (_: Throwable) {
+          null
+        }
+      }
+
+    directContexts + wrappedContexts
   } ?: emptySequence()
 }
 
@@ -50,5 +73,6 @@ internal fun CompositionContext.tryGetComposers(): Iterable<Composer> {
 }
 
 private fun Any?.tryGetCompositionContext() = REFLECTION_CONSTANTS?.let {
+  if (this == null || !it.CompositionContextHolderClass.isInstance(this)) return@let null
   it.CompositionContextHolderRefField.get(this) as? CompositionContext
 }
