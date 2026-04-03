@@ -22,6 +22,7 @@ public class AgentNode(
   public val selected: Boolean,
   public val semanticsNodeId: Int?, // for /action click on Compose nodes
   public val children: List<AgentNode>,
+  public val view: View? = null, // for performClick fallback on off-screen Android Views
 )
 
 // Node names that are pure wrappers — collapse if they have a single child and no meaningful content.
@@ -105,6 +106,7 @@ public object AgentTreeBuilder {
           selected = v.isSelected,
           semanticsNodeId = null,
           children = children,
+          view = v,
         )
       }
 
